@@ -18,7 +18,7 @@ namespace LicenseController2.Controllers
         public LicenseToken Get()
         {
             string[] encryptedText;
-            LicenseToken token = new LicenseToken { Id = Guid.NewGuid(), Message = "", Result = false, Timestamp = DateTime.Now };
+            LicenseToken token = new LicenseToken { Id = Guid.NewGuid(), Message = "MAC Address错误，请更新授权文件！", Result = false, Timestamp = DateTime.Now };
 
             try
             {
@@ -39,12 +39,31 @@ namespace LicenseController2.Controllers
 
             Crypto cryptoHelper = new Crypto();
 
-            byte[] encryptedBytes = Convert.FromBase64String(encryptedText[0]);
-            byte[] passwordBytes = Encoding.UTF8.GetBytes("Lorentz@QWESTRO");
+            byte[] encryptedBytes;
+            byte[] passwordBytes;
+            byte[] decryptedBytes;
+            string decryptedText;
+
+            try {
+                encryptedBytes = Convert.FromBase64String(encryptedText[0]);
+            } catch (Exception e)
+            {
+                token.Result = false;
+                token.Message = "授权文件内容不对，请更新授权文件！";
+                return token;
+            }
+            passwordBytes = Encoding.UTF8.GetBytes("Lorentz@QWESTRO");
             passwordBytes = SHA256.Create().ComputeHash(passwordBytes);
 
-            byte[] decryptedBytes = cryptoHelper.AES_Decrypt(encryptedBytes, passwordBytes);
-            string decryptedText = Encoding.UTF8.GetString(decryptedBytes);
+            decryptedBytes = cryptoHelper.AES_Decrypt(encryptedBytes, passwordBytes);
+            decryptedText = Encoding.UTF8.GetString(decryptedBytes);
+
+            if (decryptedText.Length != 21)
+            {
+                token.Result = false;
+                token.Message = "授权文件内容不对，请更新授权文件！";
+                return token;
+            }
 
             string macAddress = "";
             string expiryDateStr = "";
@@ -62,7 +81,16 @@ namespace LicenseController2.Controllers
             }
 
             DateTime localDate = DateTime.Now;
-            DateTime expiryDate = DateTime.ParseExact(expiryDateStr, "ddMMyyyy", null);
+            DateTime expiryDate;
+
+            try {
+                expiryDate = DateTime.ParseExact(expiryDateStr, "ddMMyyyy", null);
+            } catch
+            {
+                token.Result = false;
+                token.Message = "日期格式不对，请更新授权文件！";
+                return token;
+            }
 
             IPGlobalProperties computerProperties = IPGlobalProperties.GetIPGlobalProperties();
             NetworkInterface[] nics = NetworkInterface.GetAllNetworkInterfaces();
